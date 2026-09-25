@@ -14,7 +14,7 @@
     for (const b of D.list('body')) {
       if (b.kg == null) continue;
       const cur = byDay.get(b.day);
-      if (!cur || (b.created || '') > (cur.created || '')) byDay.set(b.day, b);
+      if (!cur || (b.created || '') > (cur.created || '')) byDay.set(b.day, Object.assign({}, b));
     }
     const pts = [...byDay.values()].sort(U.byAsc((b) => b.day));
     let trend = null;
@@ -99,7 +99,7 @@
       const last = pts[pts.length - 1];
       const monthAgo = pts.filter((x) => U.dayDiff(x.day, last.day) >= 25).pop();
       const change = monthAgo ? last.trend - monthAgo.trend : null;
-      const fmtChange = (c) => (c == null ? '–' : (c > 0 ? '+' : c < 0 ? '−' : '') + (units === 'kg' ? Math.abs(c).toFixed(1) + ' kg' : Math.abs(c * 2.20462).toFixed(1) + ' lb'));
+      const fmtChange = (c) => (c == null ? '–' : (c > 0 ? '+' : c < 0 ? '−' : '') + N.fmtChange(c, units));
       const toGo = p.targetKg ? last.trend - p.targetKg : null;
       root.appendChild(
         h(
@@ -149,7 +149,18 @@
           recent.map((b) =>
             h('li.wk-item.static', h('span.wk-main', h('span.wk-name', N.fmtWeight(b.kg, units)), h('span.wk-sub', U.relDay(U.parseDay(b.day)) + (b.waist ? ' · waist ' + b.waist + ' cm' : ''))), UI.iconBtn('x', 'Delete this weigh-in', async () => {
               await D.remove('body', b.id);
-              UI.toast('Weigh-in removed', { action: { label: 'Undo', run: () => D.put('body', b, { touch: false }) } });
+              const latest = series().pop();
+              if (latest) await D.updateProfile({ weightKg: Math.round(latest.kg * 10) / 10 });
+              UI.toast('Weigh-in removed', {
+                action: {
+                  label: 'Undo',
+                  run: async () => {
+                    await D.put('body', b, { touch: false });
+                    const l2 = series().pop();
+                    if (l2) await D.updateProfile({ weightKg: Math.round(l2.kg * 10) / 10 });
+                  }
+                }
+              });
             }))
           )
         )

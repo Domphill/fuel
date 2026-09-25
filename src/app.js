@@ -11,7 +11,7 @@
   const drafts = (L.drafts = L.drafts || {});
 
   const TABS = [
-    { name: 'dashboard', label: 'Dashboard', icon: 'today', also: ['nutrition'] },
+    { name: 'dashboard', label: 'Dashboard', icon: 'home', also: ['nutrition'] },
     { name: 'diary', label: 'Diary', icon: 'journal' },
     { name: 'plus', label: 'Add', icon: 'plus', plus: true },
     { name: 'progress', label: 'Progress', icon: 'insights' },

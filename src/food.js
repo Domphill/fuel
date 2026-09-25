@@ -27,7 +27,7 @@
       const key = (e.name + '|' + (e.brand || '')).toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ name: e.name, brand: e.brand, group: e.group, per100: e.per100, serving: e.serving || null, packG: e.packG || null, code: e.code || null, src: 'recent', lastGrams: e.grams });
+      out.push({ name: e.name, brand: e.brand, group: e.group, per100: e.per100, serving: e.serving || null, packG: e.packG || null, packLabel: e.packLabel || null, code: e.code || null, src: 'recent', lastGrams: e.grams });
       if (out.length >= 25) break;
     }
     return out;
@@ -62,16 +62,26 @@
     const st = { tab: opts.tab || 'search', meal: opts.meal || F.guessMeal(), day: opts.day || U.todayKey(), q: '' };
     let stopScan = null;
     let aborter = null;
+    let closed = false;
+    let scanId = 0; /* bumps whenever the scan screen goes away, so late results are ignored */
     const body = h('div.add-sheet');
     const s = UI.sheet({
       title: 'Add food',
       wide: true,
       body,
       onClose: () => {
+        closed = true;
+        scanId++;
         if (stopScan) stopScan();
+        stopScan = null;
         if (aborter) aborter.abort();
       }
     });
+    const endScan = () => {
+      scanId++;
+      if (stopScan) stopScan();
+      stopScan = null;
+    };
 
     function tabs() {
       return UI.segmented({
@@ -91,10 +101,8 @@
     }
 
     function paint() {
-      if (stopScan) {
-        stopScan();
-        stopScan = null;
-      }
+      endScan();
+      if (aborter) aborter.abort();
       UI.clear(body);
       body.appendChild(tabs());
       if (st.tab === 'search') paintSearch();
@@ -105,7 +113,7 @@
 
     function paintSearch() {
       const list = h('ul.food-list');
-      const input = h('input.input#food-q', {
+      const input = h('input.input.search-input#food-q', {
         type: 'search',
         placeholder: 'Search foods, like “chicken breast” or “oats”',
         'aria-label': 'Search foods',
@@ -129,8 +137,51 @@
         }
         hits.forEach((f) => list.appendChild(foodRow(f, portion)));
       }
+      const online = h('div.online');
+      const onlineBtn = UI.btn('Search brands online', searchOnline, { small: true, icon: 'search', kind: 'ghost' });
+      async function searchOnline() {
+        const q = (st.q || input.value || '').trim();
+        UI.clear(online);
+        if (q.length < 2) {
+          online.appendChild(h('p.hint', 'Type what you\u2019re looking for first, like \u201cDoritos chilli\u201d.'));
+          return;
+        }
+        onlineBtn.disabled = true;
+        online.appendChild(h('p.hint', { role: 'status' }, 'Searching UK products\u2026'));
+        if (aborter) aborter.abort();
+        aborter = new AbortController();
+        const mine = aborter;
+        const timer = setTimeout(() => mine.abort(), 15000);
+        try {
+          const found = await L.scan.searchOnline(q, mine.signal);
+          if (closed || mine !== aborter) return;
+          UI.clear(online);
+          if (!found.length) online.appendChild(h('p.hint', 'No UK products matched. Try different words, or scan the barcode.'));
+          else {
+            online.appendChild(h('h3.mini-title', 'Branded products'));
+            online.appendChild(h('ul.food-list', found.map((f) => foodRow(f, portion))));
+          }
+        } catch (e) {
+          if (closed || mine !== aborter) return;
+          UI.clear(online);
+          const msg =
+            e && e.name === 'AbortError'
+              ? 'The search took too long. Check your connection and try again.'
+              : navigator.onLine === false
+                ? 'You\u2019re offline. Online search needs a connection.'
+                : e && e.name === 'TypeError'
+                  ? 'The online food search is busy. It allows a few searches a minute, so wait a moment and try again.'
+                  : e.message;
+          online.appendChild(h('p.hint', msg));
+        } finally {
+          clearTimeout(timer);
+          onlineBtn.disabled = false;
+        }
+      }
       body.appendChild(h('div.search-box', UI.icon('search', 'search-ic'), input));
       body.appendChild(list);
+      body.appendChild(h('div.online-row', onlineBtn, h('span.fineprint', 'Sends only your search words to Open Food Facts.')));
+      body.appendChild(online);
       body.appendChild(h('button.link-btn', { type: 'button', onclick: () => labelForm({}) }, '+ Add a food from its label'));
       fill();
       requestAnimationFrame(() => input.focus());
@@ -208,7 +259,7 @@
           status.textContent = 'That number doesn’t look like a full barcode. Check the digits under the bars.';
           return;
         }
-        if (stopScan) stopScan();
+        endScan();
         handleCode(c, status);
       };
       typed.addEventListener('keydown', (e) => {
@@ -226,28 +277,65 @@
         status.textContent = 'The camera isn’t available here. Type the barcode number instead.';
         return;
       }
+      let hintT = null;
+      const tools = h('div.scan-tools');
+      box.appendChild(tools);
+      const myScan = ++scanId;
       SC.start(
         video,
-        (code) => handleCode(code, status),
+        (code) => {
+          clearTimeout(hintT);
+          if (myScan === scanId && !closed) handleCode(code, status);
+        },
         (msg) => {
+          clearTimeout(hintT);
           box.hidden = true;
           status.textContent = msg;
+          body.insertBefore(UI.btn('Try the camera again', () => { st.tab = 'scan'; paint(); }, { small: true, icon: 'refresh' }), status.nextSibling);
+        },
+        () => {
+          status.textContent = 'Hold your phone about 20 cm from the packet so the camera can focus, with the barcode inside the box.';
+          if (SC.torchAvailable()) {
+            let on = false;
+            tools.appendChild(
+              h('button.scan-torch', { type: 'button', 'aria-pressed': 'false', onclick: async (e) => {
+                const btn = e.currentTarget;
+                on = !on;
+                await SC.setTorch(on);
+                btn.setAttribute('aria-pressed', String(on));
+              } }, UI.icon('flame'), h('span', 'Torch'))
+            );
+          }
+          hintT = setTimeout(() => {
+            if (box.isConnected && !box.hidden) status.textContent = 'Still looking. Move the phone a little further away if the bars look blurry, smooth the packet flat so it doesn\u2019t shine, and try more light. You can always type the number instead.';
+          }, 8000);
         }
       ).then((stop) => {
-        stopScan = stop;
+        const end = () => {
+          clearTimeout(hintT);
+          stop();
+        };
+        /* The sheet was closed or the tab changed while the camera was starting: switch it off now. */
+        if (myScan !== scanId || closed) end();
+        else stopScan = end;
       });
     }
 
     async function handleCode(code, status) {
-      const cached = D.list('foods').find((f) => f.code === code);
+      const forms = SC.candidates(code);
+      const cached = D.list('foods').find((f) => f.code && (f.code === code || forms.includes(f.code)));
       if (cached) {
         portion(cached);
         return;
       }
-      status.textContent = 'Found ' + code + '. Looking it up…';
+      status.textContent = 'Found ' + code + '. Looking it up\u2026';
+      if (aborter) aborter.abort();
       aborter = new AbortController();
+      const mine = aborter;
+      const timer = setTimeout(() => mine.abort(), 12000);
       try {
-        const food = await Promise.race([SC.lookup(code, aborter.signal), U.sleep(12000).then(() => Promise.reject(new Error('The lookup took too long. Check your connection and try again.')))]);
+        const food = await SC.lookup(code, mine.signal);
+        if (closed || mine !== aborter || st.tab !== 'scan') return;
         if (!food) {
           status.textContent = 'That product isn’t in the database yet. You can add it from the label.';
           labelForm({ code });
@@ -261,21 +349,25 @@
         const saved = await remember(food);
         portion(saved);
       } catch (e) {
-        if (e && e.name === 'AbortError') return;
-        status.textContent = navigator.onLine === false ? 'You’re offline. Scanned products need a connection the first time.' : e.message || 'The lookup failed. Try again.';
+        if (closed || mine !== aborter) return;
+        status.textContent =
+          e && e.name === 'AbortError'
+            ? 'The lookup took too long. Check your connection and try again.'
+            : navigator.onLine === false
+              ? 'You\u2019re offline. Scanned products need a connection the first time.'
+              : (e && e.message) || 'The lookup failed. Try again.';
+      } finally {
+        clearTimeout(timer);
       }
     }
 
     /* ----- portion ----- */
     function portion(food) {
-      if (stopScan) {
-        stopScan();
-        stopScan = null;
-      }
+      endScan();
       UI.clear(body);
       const presets = [];
       if (food.serving && food.serving.g) presets.push({ g: food.serving.g, label: '1 serving (' + food.serving.g + ' g)' });
-      if (food.packG && (!food.serving || food.packG !== food.serving.g)) presets.push({ g: food.packG, label: 'Whole pack (' + food.packG + ' g)' });
+      if (food.packG && (!food.serving || food.packG !== food.serving.g)) presets.push({ g: food.packG, label: (food.packLabel || 'Whole pack') + ' (' + food.packG + ' g)' });
       [50, 100, 150, 200].forEach((g) => presets.push({ g, label: g + ' g' }));
       const start = food.lastGrams || (food.serving && food.serving.g) || 100;
       const amt = { g: start, count: 1 };
@@ -336,11 +428,10 @@
           UI.btn('Add to ' + mealLabel(st.meal).toLowerCase(), async () => {
             if (!(amt.g > 0) || amt.g > 5000) return (err.textContent = 'Enter an amount between 1 and 5,000.');
             const n = N.scale(food.per100, amt.g);
-            await D.put('entries', Object.assign({ day: st.day, meal: st.meal, ts: U.nowIso(), name: food.name, brand: food.brand || '', code: food.code || null, group: food.group || 'mixed', grams: Math.round(amt.g * 10) / 10, per100: food.per100, serving: food.serving || null, packG: food.packG || null }, n));
-            if (food.src === 'saved' || food.src === 'off' || food.src === 'label') {
-              const rec = D.get('foods', food.id);
-              if (rec) D.put('foods', Object.assign(U.clone(rec), { used: U.nowIso() }), { silent: true });
-            }
+            await D.put('entries', Object.assign({ day: st.day, meal: st.meal, ts: U.nowIso(), name: food.name, brand: food.brand || '', code: food.code || null, group: food.group || 'mixed', grams: Math.round(amt.g * 10) / 10, per100: food.per100, serving: food.serving || null, packG: food.packG || null, packLabel: food.packLabel || null }, n));
+            const rec = food.id ? D.get('foods', food.id) : null;
+            if (rec) D.put('foods', Object.assign(U.clone(rec), { used: U.nowIso() }), { silent: true });
+            else if (food.src === 'off') await remember(food); /* keep products found online, so they work offline next time */
             UI.toast('Added ' + n.kcal + ' kcal to ' + mealLabel(st.meal).toLowerCase());
             s.close();
           }, { kind: 'primary', id: 'p-add' })
@@ -352,10 +443,7 @@
 
     /* ----- a food from its label ----- */
     function labelForm(pre) {
-      if (stopScan) {
-        stopScan();
-        stopScan = null;
-      }
+      endScan();
       UI.clear(body);
       const f = { name: pre.name || '', brand: pre.brand || '', code: pre.code || '', group: 'mixed', serving: '', v: {} };
       const err = h('p.form-error', { role: 'alert' });
@@ -417,8 +505,9 @@
       const n = N.scale(e.per100, e.grams);
       preview.textContent = n.kcal + ' kcal · ' + fmt(n.protein, 1) + ' g protein · ' + fmt(n.carbs, 1) + ' g carbs · ' + fmt(n.fat, 1) + ' g fat';
     };
+    const unit = /drink|alcohol|juice/.test(e.group || '') ? 'ml' : 'g';
     const fields = e.per100
-      ? UI.field('Amount (g)', h('input.input', { type: 'number', inputmode: 'decimal', min: '1', step: 'any', value: String(e.grams), oninput: (ev) => ((e.grams = Number(ev.target.value) || 0), show()) }))
+      ? UI.field('Amount (' + unit + ')', h('input.input', { type: 'number', inputmode: 'decimal', min: '1', step: 'any', value: String(e.grams), oninput: (ev) => ((e.grams = Number(ev.target.value) || 0), show()) }))
       : UI.field('Calories', h('input.input', { type: 'number', inputmode: 'decimal', min: '1', step: 'any', value: String(e.kcal), oninput: (ev) => (e.kcal = Number(ev.target.value) || 0) }));
     const s = UI.sheet({
       title: e.name,

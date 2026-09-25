@@ -12,10 +12,15 @@
 
   function niceTicks(max, target, label) {
     const step = max > 3000 ? 1000 : max > 1200 ? 500 : max > 300 ? 100 : max > 120 ? 50 : 25;
+    const top = Math.max(step, Math.ceil(max / step) * step);
     const ticks = [];
-    for (let v = 0; v <= max; v += step) ticks.push({ v, label: String(v) });
+    for (let v = 0; v <= top; v += step) {
+      /* Leave room for the target label rather than printing two labels on top of each other. */
+      if (target && Math.abs(v - target) < step * 0.35) continue;
+      ticks.push({ v, label: String(v) });
+    }
     if (target) ticks.push({ v: target, label: label });
-    return { ticks, max: Math.ceil(max / step) * step };
+    return { ticks, max: top };
   }
 
   V.progress = {
@@ -95,7 +100,7 @@
       if (pts.length >= 2) {
         const units = D.profile().units || 'kg';
         const diff = pts[pts.length - 1].trend - pts[0].trend;
-        root.appendChild(h('section.card', h('h2.card-title', 'Weight'), h('p', 'Your trend weight went ' + (Math.abs(diff) < 0.1 ? 'nowhere much' : (diff < 0 ? 'down ' : 'up ') + N.fmtWeight(Math.abs(diff), units)) + ' over this period.'), UI.btn('See the full chart', () => L.router.go('body'), { small: true, kind: 'ghost' })));
+        root.appendChild(h('section.card', h('h2.card-title', 'Weight'), h('p', 'Your trend weight went ' + (Math.abs(diff) < 0.1 ? 'nowhere much' : (diff < 0 ? 'down ' : 'up ') + N.fmtChange(diff, units)) + ' over this period.'), UI.btn('See the full chart', () => L.router.go('body'), { small: true, kind: 'ghost' })));
       }
     }
   };

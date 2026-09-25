@@ -39,7 +39,7 @@
   }
 
   function streak() {
-    const days = new Set(D.list('entries').map((e) => e.day));
+    const days = new Set(D.list('entries').filter((e) => e.kind !== 'water').map((e) => e.day));
     let n = 0;
     let d = new Date();
     if (!days.has(U.dayKey(d))) d = U.addDays(d, -1);
@@ -56,6 +56,8 @@
       const today = U.todayKey();
       const n = V.dayNumbers(today);
       root.appendChild(h('div.page-head', h('h1.page-title', 'Today')));
+      const resume = V.resumeCard && V.resumeCard();
+      if (resume) root.appendChild(resume);
       if (!n.tg) {
         root.appendChild(h('section.notice', h('div', h('p', 'Set up your goal to get a daily calorie target.'), UI.btn('Set my goal', () => R.go('settings'), { small: true }))));
       }
@@ -136,13 +138,13 @@
       const n = V.dayNumbers(day);
       const t = n.t;
       root.appendChild(h('div.editor-bar', h('button.back-btn', { type: 'button', onclick: () => R.back('dashboard') }, UI.icon('back'), h('span', 'Back'))));
+      root.appendChild(h('h1.page-title', 'Nutrition'));
       root.appendChild(
         h(
-          'div.day-nav',
+          'div.date-bar',
           UI.iconBtn('back', 'Previous day', () => ((drafts.nday = U.dayKey(U.addDays(U.parseDay(day), -1))), L.app.render())),
-          h('h1.day-title', 'Nutrition'),
-          day < today ? UI.iconBtn('chev', 'Next day', () => ((drafts.nday = U.dayKey(U.addDays(U.parseDay(day), 1))), L.app.render())) : h('span.icon-spacer'),
-          h('span.day-date', day === today ? 'Today' : U.fmtLong(U.parseDay(day)))
+          h('p.date-title', day === today ? 'Today' : U.relDay(U.parseDay(day))),
+          day < today ? UI.iconBtn('chev', 'Next day', () => ((drafts.nday = U.dayKey(U.addDays(U.parseDay(day), 1))), L.app.render())) : h('span.icon-spacer')
         )
       );
       const kc = { carbs: t.carbs * 4, fat: t.fat * 9, protein: t.protein * 4 };

@@ -1043,3 +1043,102 @@
 .tab[aria-current='page'] {
   color: var(--primary);
 }
+
+.scan-tools {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 8px;
+}
+.scan-torch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.scan-torch[aria-pressed='true'] {
+  background: #ffd24d;
+  color: #1a1a1a;
+}
+
+/* The blue bar runs up under the iPhone status bar, like a native app. */
+:root {
+  --bar: #0b63ce;
+  --on-bar: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bar: #12305a;
+  }
+}
+:root[data-theme='dark'] {
+  --bar: #12305a;
+}
+.topbar {
+  top: 0;
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  background: var(--bar);
+  color: var(--on-bar);
+}
+.topbar .brand,
+.topbar .brand-name {
+  color: var(--on-bar);
+}
+.topbar .logo-line {
+  stroke: var(--on-bar);
+}
+.shell.bare main {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@media (min-width: 960px) {
+  .topbar {
+    background: transparent;
+    padding-top: 12px;
+  }
+}
+.resume {
+  background: var(--notice);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ds-draft .ds-name {
+  color: var(--primary);
+}
+.draft-note {
+  margin-top: -6px;
+}
+.online-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.online-row .fineprint {
+  margin: 0;
+}
+.online {
+  display: grid;
+  gap: 8px;
+}
+
+.add-sheet > .seg .seg-btn {
+  white-space: nowrap;
+  padding: 0 6px;
+  font-size: 0.9rem;
+}
+
+/* Keep the blue bar during setup too, so the iPhone clock stays readable. */
+.shell.bare .topbar {
+  display: flex;
+}
+.shell.bare main {
+  padding-top: 0;
+}

@@ -97,10 +97,23 @@
         )
       )
     );
+    const draft = V.workoutDraft && V.workoutDraft.active();
+    if (draft && draft.day === day) {
+      rows.unshift(
+        h(
+          'li',
+          h(
+            'button.ds-row.ds-draft',
+            { type: 'button', onclick: () => R.go('workout', 'new') },
+            h('span.ds-main', h('span.ds-name', (draft.name || 'Strength workout') + ' (in progress)'), h('span.ds-sub', U.plural(draft.exercises.length, 'exercise') + '. Tap to carry on.')),
+            UI.icon('chev')
+          )
+        )
+      );
+    }
     return section('Exercise', total || (rows.length ? 0 : null), rows, [
       addLink('Add cardio', () => {
-        drafts.day = day;
-        V.cardioSheet();
+        V.cardioSheet(null, day);
       }, 'run'),
       addLink('Add strength', () => {
         drafts.day = day;
@@ -144,7 +157,7 @@
       body.appendChild(h('p.complete-big', N.fmtWeight(kgIn5, p.units || 'kg')));
       body.appendChild(h('p.muted', 'in 5 weeks.'));
       body.appendChild(h('p.fineprint', 'A rough guide based on your estimated energy use of ' + tdee + ' kcal a day. Real bodies vary, so watch your weight trend over a few weeks.'));
-      if (n.food < N.floor(p)) body.appendChild(h('p.warn', 'You ate less than ' + N.floor(p) + ' kcal today. Eating this little regularly isn’t safe without medical support, and it makes training and mood harder.'));
+      if (n.food < N.floor(p)) body.appendChild(h('p.warn', 'If that\u2019s everything you ate today, it\u2019s under ' + N.floor(p) + ' kcal. Eating this little regularly isn\u2019t safe without medical support, and it makes training and mood harder.'));
     }
     UI.sheet({ title: 'Diary complete', body });
   }

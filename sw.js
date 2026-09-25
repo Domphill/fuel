@@ -1,6 +1,6 @@
 /* Fuel — offline support. The app files are cached so Fuel opens without a connection.
    Barcode lookups (openfoodfacts.org) always go to the network. Bump VERSION when files change. */
-const VERSION = 'fuel-v1';
+const VERSION = 'fuel-v2';
 const FILES = [
   './',
   'index.html',
@@ -14,6 +14,8 @@ const FILES = [
   'fonts/barlow-condensed-700.woff2',
   'icons/icon-192.png',
   'icons/apple-touch-icon.png',
+  'vendor/barcode-detector.js',
+  'vendor/zxing_reader.wasm',
   'vendor/zxing.min.js',
   'src/base.css',
   'src/fuel.css',
@@ -37,7 +39,13 @@ const FILES = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  /* cache: 'reload' skips the browser's HTTP cache, so a new version never precaches old files. */
+  e.waitUntil(
+    caches
+      .open(VERSION)
+      .then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {

@@ -128,7 +128,10 @@
     scan: '<path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M4 12h16"/>',
     flame: '<path d="M12 3.5c3.5 3.5 6 6.5 6 10a6 6 0 0 1-12 0c0-2.5 1.5-4.5 3-5.5 0 2 1 3 2 3 0-3 0-5 1-7.5z"/>',
     run: '<circle cx="14.5" cy="4.5" r="1.8"/><path d="M8 20l3.5-5 3 2.5V21"/><path d="M6 11.5 9 8.5h4.5l2 4 3 1"/><path d="m11.5 15-1-4"/>',
-    history: '<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v3.5H8"/><path d="M12 8v4l2.5 2"/>'
+    history: '<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v3.5H8"/><path d="M12 8v4l2.5 2"/>',
+    more: '<circle cx="5.5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.7" fill="currentColor" stroke="none"/>',
+    home: '<path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10v9.5h11V10"/><path d="M10 19.5v-5h4v5"/>',
+    drop: '<path d="M12 3.5c3.5 4.3 5.5 7.3 5.5 10a5.5 5.5 0 0 1-11 0c0-2.7 2-5.7 5.5-10z"/>'
   };
   UI.icon = (name, cls) => {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -469,6 +472,21 @@
       }
     }
     const blob = new Blob([text], { type: mime || 'application/octet-stream' });
+    /* On iPhone, the share sheet ("Save to Files") is more reliable than a download link,
+       especially for an app added to the home screen. */
+    const touch = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (touch && navigator.canShare && window.File) {
+      try {
+        const file = new File([blob], filename, { type: mime || 'application/octet-stream' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: filename });
+          return 'saved';
+        }
+      } catch (e) {
+        if (e && e.name === 'AbortError') return 'declined';
+        /* fall back to a normal download */
+      }
+    }
     const url = URL.createObjectURL(blob);
     const a = h('a', { href: url, download: filename, style: 'display:none' });
     document.body.appendChild(a);

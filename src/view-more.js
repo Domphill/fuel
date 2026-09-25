@@ -9,6 +9,8 @@
   const V = (L.views = L.views || {});
   const drafts = (L.drafts = L.drafts || {});
 
+  /* The + menu adds to the day on screen in the diary, otherwise to today. */
+  const targetDay = () => (R.current.name === 'diary' ? V.diaryDay() : U.todayKey());
   V.plusMenu = () => {
     const item = (icon, label, fn) =>
       h(
@@ -27,16 +29,17 @@
       title: 'Add',
       body: h(
         'div.plus-grid',
-        item('barcode', 'Barcode scan', () => L.food.add({ tab: 'scan', day: V.diaryDay() })),
-        item('search', 'Log food', () => L.food.add({ day: V.diaryDay() })),
-        item('run', 'Exercise', () => V.cardioSheet()),
+        item('barcode', 'Barcode scan', () => L.food.add({ tab: 'scan', day: targetDay() })),
+        item('search', 'Log food', () => L.food.add({ day: targetDay() })),
+        item('run', 'Exercise', () => V.cardioSheet(null, targetDay())),
         item('dumbbell', 'Strength workout', () => {
+          drafts.day = targetDay();
           drafts.workout = null;
           R.go('workout', 'new');
         }),
         item('scale', 'Weight', () => V.logWeight()),
-        item('plus', 'Water', async () => {
-          await D.put('entries', { kind: 'water', day: V.diaryDay(), ml: 250, ts: U.nowIso(), kcal: 0 });
+        item('drop', 'Water', async () => {
+          await D.put('entries', { kind: 'water', day: targetDay(), ml: 250, ts: U.nowIso(), kcal: 0 });
           UI.toast('Added a glass of water');
         })
       )
@@ -52,7 +55,7 @@
         h(
           'ul.more-list',
           row('insights', 'Nutrition', 'Macros pie and nutrients for any day', 'nutrition'),
-          row('dumbbell', 'Exercises', 'Your workouts and personal bests', 'train'),
+          row('dumbbell', 'Exercises', 'Your workouts, personal bests and any workout in progress', 'train'),
           row('scale', 'Weight and body', 'Weigh-ins and your trend', 'body'),
           row('goals', 'Goals and settings', 'Calories, macros, units, your data', 'settings')
         )

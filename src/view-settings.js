@@ -13,6 +13,7 @@
   /* The details form. onDone(profilePatch) receives validated values. */
   V.profileForm = (opts) => {
     const p = Object.assign({ sex: '', age: '', heightCm: '', weightKg: '', activity: 'light', goal: 'recomp', pace: 'steady', targetKg: '', units: 'kg', heightUnits: 'cm' }, D.profile(), opts.initial || {});
+    if (p.activity === 'extra') p.activity = 'very'; /* an older choice that has been folded into Very active */
     const box = h('div.form.profile-form');
     const err = h('p.form-error', { role: 'alert' });
     const out = h('div.target-preview', { 'aria-live': 'polite' });
@@ -60,7 +61,7 @@
           h('div.tp', h('span.tp-v', t.fat + ' g'), h('span.tp-l', 'fat'))
         )
       );
-      out.appendChild(h('p.fineprint', 'You burn about ' + t.tdee + ' kcal a day, including ' + t.bmr + ' at rest.' + (t.floored ? ' Your target is held at a safe minimum rather than going lower.' : '')));
+      out.appendChild(h('p.fineprint', 'On a normal day without exercise you burn about ' + t.tdee + ' kcal, including ' + t.bmr + ' at rest. Exercise you log is added on top.' + (t.floored ? ' Your target is held at a safe minimum rather than going lower.' : '')));
       if (bmi && bmi < 18.5 && (c.goal === 'lose' || c.goal === 'recomp')) {
         out.appendChild(h('p.warn', 'Your BMI is below the healthy range, so Fuel won’t set a fat-loss target. Building muscle or staying where you are would suit you better, and your GP can help you plan.'));
       }
@@ -120,7 +121,8 @@
       box.appendChild(
         h(
           'div.field',
-          h('span.label', 'How active are you?'),
+          h('span.label', 'How active is your normal day?'),
+          h('span.help', 'Don\u2019t count exercise here. You log workouts separately and they\u2019re added on top.'),
           h('div.choice-list', N.ACTIVITY.map((a) => h('button.choice', { type: 'button', 'aria-pressed': String(p.activity === a.v), onclick: () => ((p.activity = a.v), paintChoices(), preview()) }, h('span.choice-t', a.label), h('span.choice-h', a.help))))
         )
       );
@@ -166,7 +168,13 @@
   async function saveProfile(c) {
     const cur = D.profile();
     await D.updateProfile(Object.assign({}, c, { onboarded: true, custom: cur.custom || null }));
-    if (c.weightKg && !D.list('body').some((b) => b.day === U.todayKey())) await D.put('body', { day: U.todayKey(), kg: c.weightKg, waist: null });
+    if (!c.weightKg) return;
+    /* Keep today's weigh-in in step with the weight entered here. */
+    const today = D.list('body')
+      .filter((b) => b.day === U.todayKey())
+      .sort(U.byDesc((b) => b.created || ''))[0];
+    if (!today) await D.put('body', { day: U.todayKey(), kg: c.weightKg, waist: null });
+    else if (Math.abs(today.kg - c.weightKg) >= 0.05) await D.put('body', Object.assign(U.clone(today), { kg: c.weightKg }));
   }
   V.saveProfile = saveProfile;
 
@@ -259,8 +267,8 @@
             'div.actions',
             UI.btn('Download a backup', async () => {
               try {
-                await UI.download('fuel-backup-' + U.todayKey() + '.json', JSON.stringify(D.exportData(), null, 2), 'application/json');
-                UI.toast('Backup saved to your downloads.');
+                const r = await UI.download('fuel-backup-' + U.todayKey() + '.json', JSON.stringify(D.exportData(), null, 2), 'application/json');
+                if (r === 'saved') UI.toast('Backup ready. Keep it somewhere safe, like Files or iCloud Drive.');
               } catch (e) {
                 UI.toast(e.message);
               }

@@ -7,13 +7,15 @@
   const U = L.util;
   const N = (L.nutri = {});
 
+  /* How active a normal day is, not counting exercise. Logged exercise is added on top, so it
+     isn't counted twice. */
   N.ACTIVITY = [
-    { v: 'sitting', label: 'Mostly sitting', help: 'Desk job, little exercise', mult: 1.2 },
-    { v: 'light', label: 'Lightly active', help: 'On your feet some of the day, or 1 to 2 workouts a week', mult: 1.375 },
-    { v: 'moderate', label: 'Active', help: '3 to 4 workouts a week', mult: 1.55 },
-    { v: 'very', label: 'Very active', help: '5 or more hard workouts a week', mult: 1.725 },
-    { v: 'extra', label: 'Athlete or physical job', help: 'Training hard plus a physical job', mult: 1.9 }
+    { v: 'sitting', label: 'Not very active', help: 'Most of the day sitting, like a desk job', mult: 1.2 },
+    { v: 'light', label: 'Lightly active', help: 'A good part of the day on your feet, like a teacher or shop worker', mult: 1.375 },
+    { v: 'moderate', label: 'Active', help: 'A good part of the day doing physical work, like a waiter or postal worker', mult: 1.55 },
+    { v: 'very', label: 'Very active', help: 'Most of the day doing heavy physical work, like a builder or labourer', mult: 1.725 }
   ];
+  N.activityOf = (v) => N.ACTIVITY.find((a) => a.v === (v === 'extra' ? 'very' : v)) || N.ACTIVITY[1];
   N.GOALS = [
     { v: 'lose', label: 'Lose fat', help: 'Eat a little less than you burn, keep protein high, keep lifting.' },
     { v: 'recomp', label: 'Lose fat and build muscle', help: 'A small deficit with high protein and regular strength training.' },
@@ -98,7 +100,7 @@
   /* Daily targets from a profile. Deficits are capped so targets never fall below a safe floor. */
   N.targets = (p) => {
     if (!p || !p.weightKg || !p.heightCm || !p.age) return null;
-    const act = N.ACTIVITY.find((a) => a.v === p.activity) || N.ACTIVITY[1];
+    const act = N.activityOf(p.activity);
     const bmr = N.bmr(p);
     const tdee = bmr * act.mult;
     let kcal = tdee;
@@ -153,7 +155,8 @@
     return t;
   };
 
-  N.exerciseKcal = (met, kg, minutes) => Math.round(met * (kg || 70) * (minutes / 60));
+  /* Calories burned by exercise on top of what you'd burn anyway, so resting burn isn't counted twice. */
+  N.exerciseKcal = (met, kg, minutes) => Math.max(0, Math.round((met - 1) * (kg || 70) * (minutes / 60)));
 
   /* Units */
   N.kgToStLb = (kg) => {
@@ -169,11 +172,16 @@
   N.fmtWeight = (kg, units) => {
     if (kg == null) return '–';
     if (units === 'st') {
-      const s = N.kgToStLb(kg);
-      return s.st + ' st ' + Math.round(s.lb) + ' lb';
+      const lb = Math.round(kg * 2.20462);
+      return Math.floor(lb / 14) + ' st ' + (lb % 14) + ' lb';
     }
     if (units === 'lb') return Math.round(kg * 2.20462) + ' lb';
     return (Math.round(kg * 10) / 10).toFixed(1) + ' kg';
+  };
+  /* A change in weight, without a sign: kg, or pounds for stone and pound users. */
+  N.fmtChange = (kg, units) => {
+    const v = Math.abs(kg || 0);
+    return units === 'kg' || !units ? v.toFixed(1) + ' kg' : (v * 2.20462).toFixed(1) + ' lb';
   };
   N.cmToFtIn = (cm) => {
     const inches = cm / 2.54;
@@ -202,21 +210,28 @@
     return index;
   };
   N.search = (q, saved, limit) => {
+    /* Drop a plural ending, so "tomatoes" finds "Tomato" and "eggs" finds "Egg". */
+    const stem = (w) => (w.length > 3 ? w.replace(/(es|s)$/, '') : w);
     const words = String(q || '')
       .toLowerCase()
       .split(/[\s,]+/)
-      .filter(Boolean);
+      .filter(Boolean)
+      .map(stem);
     if (!words.length) return [];
-    const pool = saved.map((f) => Object.assign({ lower: ((f.name || '') + ' ' + (f.brand || '')).toLowerCase(), src: 'saved' }, f)).concat(N.builtIn());
+    const pool = saved.map((f) => Object.assign({}, f, { lower: ((f.name || '') + ' ' + (f.brand || '')).toLowerCase(), mine: true })).concat(N.builtIn());
     const hits = [];
     for (const f of pool) {
       if (!words.every((w) => f.lower.includes(w))) continue;
       let score = 0;
-      if (f.src === 'saved') score -= 50;
+      if (f.mine) score -= 50;
       if (f.lower.startsWith(words[0])) score -= 20;
       const firstPart = f.lower.split(',')[0];
       if (words.some((w) => firstPart.includes(w))) score -= 10;
-      if (/raw|homemade|canned|retail|average/.test(f.lower)) score += 1;
+      /* The food itself ("Tomatoes, raw") before things made from it ("Tomato juice"). */
+      const head = firstPart.trim();
+      if (words.some((w) => head === w || head === w + 's' || head === w + 'es')) score -= 8;
+      if (/average/.test(f.lower)) score -= 2; /* the usual, typical version */
+      if (/stuffed|\bwith\b|\bin (sauce|syrup|oil|brine)|homemade/.test(f.lower)) score += 3; /* dishes made from the food */
       score += f.lower.length / 20;
       hits.push({ f, score });
     }
