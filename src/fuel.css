@@ -1142,3 +1142,52 @@
 .shell.bare main {
   padding-top: 0;
 }
+
+/* serving-size picker */
+.picker {
+  display: grid;
+  gap: 12px;
+}
+.unit-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.unit-chip {
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+.unit-chip[aria-checked='true'] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+.count-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.count-input {
+  width: 96px;
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.portion-total {
+  font-weight: 700;
+  color: var(--ink-2);
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+/* In two-column forms, line the boxes up along the bottom when a label wraps. */
+.grid-2 > .field,
+.grid-3 > .field {
+  align-content: end;
+}

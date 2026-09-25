@@ -1,6 +1,6 @@
 /* Fuel — offline support. The app files are cached so Fuel opens without a connection.
    Barcode lookups (openfoodfacts.org) always go to the network. Bump VERSION when files change. */
-const VERSION = 'fuel-v2';
+const VERSION = 'fuel-v3';
 const FILES = [
   './',
   'index.html',

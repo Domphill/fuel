@@ -332,6 +332,9 @@
     }
     function onKey(e) {
       if (!wrap.isConnected) return;
+      /* When one sheet opens over another, only the top one answers the keyboard. */
+      const open = layer.querySelectorAll('.sheet-wrap:not(.closing)');
+      if (open[open.length - 1] !== wrap) return;
       if (e.key === 'Escape' && dismissible) {
         e.preventDefault();
         e.stopPropagation();

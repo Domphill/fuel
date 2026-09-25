@@ -56,7 +56,7 @@
         h(
           'button.ds-row',
           { type: 'button', onclick: () => L.food.edit(e) },
-          h('span.ds-main', h('span.ds-name', e.name), h('span.ds-sub', [e.brand, e.quick ? 'Quick add' : e.grams + (/drink|alcohol|juice/.test(e.group) ? ' ml' : ' g'), g1(e.protein) + ' g protein'].filter(Boolean).join(', '))),
+          h('span.ds-main', h('span.ds-name', e.name), h('span.ds-sub', [e.brand, L.food.describe(e), g1(e.protein) + ' g protein'].filter(Boolean).join(', '))),
           h('span.ds-kcal', String(Math.round(e.kcal)))
         )
       )

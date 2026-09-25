@@ -215,7 +215,7 @@
     return 'mixed';
   }
 
-  const FIELDS = 'code,product_name,product_name_en,brands,quantity,serving_size,serving_quantity,nutriments,categories_tags';
+  const FIELDS = 'code,product_name,product_name_en,brands,quantity,product_quantity,serving_size,serving_quantity,nutriments,categories_tags';
 
   /* Looks a barcode up on Open Food Facts. Resolves a food, or null when the product isn't listed. */
   S.lookup = async (code, signal) => {
@@ -254,6 +254,7 @@
       .filter((f) => f && !f.incomplete && f.name);
   };
 
+  S.fromProduct = (p, code) => fromProduct(p, code);
   function fromProduct(p, code) {
     const n = p.nutriments || {};
     const num = (v) => (v === undefined || v === null || v === '' || isNaN(Number(v)) ? null : Number(v));
@@ -265,20 +266,31 @@
     const serving = num(p.serving_quantity);
     let salt = num(n.salt_100g);
     if (salt == null && num(n.sodium_100g) != null) salt = num(n.sodium_100g) * 2.5;
-    /* "150 g" is a whole pack; "5 x 30 g" is a multipack of 30 g bags. */
+    /* "180 g" is one pack; "5 x 30 g" is a multipack of 30 g packets. Kilos and litres become g and ml. */
     const qty = String(p.quantity || '');
-    const multi = /(\d+)\s*[x×]\s*([\d.]+)\s*(g|ml)\b/i.exec(qty);
-    const single = /([\d.]+)\s*(g|ml)\b/i.exec(qty);
-    const pack = multi ? { g: Math.round(parseFloat(multi[2])), label: '1 pack' } : single ? { g: Math.round(parseFloat(single[1])), label: 'Whole pack' } : null;
+    const size = (v, unit) => {
+      const t = String(v);
+      const x = /^\d{1,3},\d{3}$/.test(t) ? parseFloat(t.replace(',', '')) : parseFloat(t.replace(',', '.'));
+      const u = unit.toLowerCase();
+      const g = u === 'kg' || u === 'l' ? x * 1000 : u === 'cl' ? x * 10 : x;
+      return { g: Math.round(g * 10) / 10, unit: u === 'g' || u === 'kg' ? 'g' : 'ml' };
+    };
+    const multi = /(\d+)\s*[x×]\s*([\d.,]+)\s*(kg|g|ml|cl|l)\b/i.exec(qty);
+    const single = /([\d.,]+)\s*(kg|g|ml|cl|l)\b/i.exec(qty);
+    const total = num(p.product_quantity);
+    let pack = null;
+    if (multi && Number(multi[1]) >= 2) pack = Object.assign(size(multi[2], multi[3]), { multi: true, count: Number(multi[1]) });
+    else if (single) pack = size(single[1], single[2]);
+    else if (total > 0) pack = { g: Math.round(total * 10) / 10 };
+    if (pack && !(pack.g > 0 && pack.g < 10000)) pack = null;
     return {
       code: String(code || p.code || ''),
       name: name || 'Product ' + code,
       brand: (p.brands || '').split(',')[0].trim(),
       group: groupFromTags(p.categories_tags),
       per100: { kcal: Math.round(kcal), protein: r1(num(n.proteins_100g)), carbs: r1(num(n.carbohydrates_100g)), fat: r1(num(n.fat_100g)), fibre: r1(num(n.fiber_100g)), sugars: r1(num(n.sugars_100g)), salt: salt == null ? null : Math.round(salt * 100) / 100 },
-      serving: serving && serving > 0 && serving < 5000 ? { g: Math.round(serving), label: p.serving_size || Math.round(serving) + ' g' } : null,
-      packG: pack && pack.g > 0 && pack.g < 10000 ? pack.g : null,
-      packLabel: pack ? pack.label : null,
+      serving: serving && serving > 0 && serving < 5000 ? { g: Math.round(serving * 10) / 10, label: p.serving_size || Math.round(serving) + ' g' } : null,
+      pack,
       src: 'off'
     };
   }
