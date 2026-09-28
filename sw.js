@@ -1,6 +1,7 @@
 /* Fuel — offline support. The app files are cached so Fuel opens without a connection.
-   Barcode lookups (openfoodfacts.org) always go to the network. Bump VERSION when files change. */
-const VERSION = 'fuel-v3';
+   Barcode lookups (openfoodfacts.org) always go to the network. Bump VERSION when files change.
+   Only caches named fuel-* are touched, because other apps (Lantern) share this origin. */
+const VERSION = 'fuel-v4';
 const FILES = [
   './',
   'index.html',
@@ -52,7 +53,7 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('fuel-') && k !== VERSION).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
